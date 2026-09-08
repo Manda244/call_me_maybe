@@ -7,5 +7,26 @@ requires-python = ">=3.11"
 dependencies = [
     "flake8>=7.3.0",
     "flake8-docstrings>=1.7.0",
-    "mypy>=2.3.1",
+    "llm-sdk",
+    "numpy>=2.4.6",
+    "pydantic>=2.13.4",
+]
+
+[tool.uv.workspace]
+members = [
+    "llm_sdk",
+]
+
+[tool.uv.sources]
+llm-sdk = { workspace = true }
+
+[tool.mypy]
+exclude = ["llm_sdk/", ".venv/"]
+
+[tool.flake8]
+exclude = [".venv", "llm_sdk"]
+
+[dependency-groups]
+dev = [
+    "flake8-pyproject>=1.2.4",
 ]
