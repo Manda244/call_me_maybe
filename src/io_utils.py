@@ -1,44 +1,42 @@
-from model import FunctionsDefinitions
-from pydantic import TypeAdapter
 import json
+from pathlib import Path
+from typing import Any
+
+from pydantic import TypeAdapter
+
+from .model import FunctionsDefinitions
 
 
-def load_fonction_definitions() -> list[FunctionsDefinitions]:
+def load_fonction_definitions(
+    read_file: str | Path | None = None,
+) -> list[FunctionsDefinitions]:
     """Load the function definitions from the JSON file."""
-    read_file = "function_definitions.json"
+    if read_file is None:
+        read_file = Path(__file__).resolve().parent.parent / "data" / "input" / "functions_definition.json"
     adapter = TypeAdapter(list[FunctionsDefinitions])
-    try:
-        with open(read_file, "r") as f:
-            data = json.load(f)
-            return adapter.validate_json(data)
-    except FileNotFoundError:
-        print(f"Error: The file '{read_file}' was not found.")
-    except json.JSONDecodeError:
-        print(f"Error: The file '{read_file}' is not a valid JSON file.")
-    finally:
-        f.close()
+    with open(read_file, encoding="utf-8") as file:
+        return adapter.validate_python(json.load(file))
 
-def load_test_prompts() -> list[dict]:
+
+def load_test_prompts(
+    read_file: str | Path | None = None,
+) -> list[dict[str, str]]:
     """Load the test prompts from the JSON file."""
-    read_file = "test_prompts.json"
-    try:
-        with open(read_file, "r") as f:
-            data = json.load(f)
-            return data
-    except FileNotFoundError:
-        print(f"Error: The file '{read_file}' was not found.")
-    except json.JSONDecodeError:
-        print(f"Error: The file '{read_file}' is not a valid JSON file.")
-    finally:
-        f.close()
+    if read_file is None:
+        read_file = Path(__file__).resolve().parent.parent / "data" / "input" / "function_calling_tests.json"
+    adapter = TypeAdapter(list[dict[str, str]])
+    with open(read_file, encoding="utf-8") as file:
+        return adapter.validate_python(json.load(file))
 
-def write_function_calling_results(results: list[dict]):
+
+def write_function_calling_results(
+    results: list[dict[str, Any]],
+    write_file: str | Path | None = None,
+) -> None:
     """Write the function calling results to a JSON file."""
-    write_file = "function_calling_results.json"
-    try:
-        with open(write_file, "w") as f:
-            json.dump(results, f, indent=4)
-    except Exception as e:
-        print(f"Error: Could not write to the file '{write_file}'. {e}")
-    finally:
-        f.close()
+    if write_file is None:
+        write_file = Path(__file__).resolve().parent.parent / "data" / "output" / "function_calling_results.json"
+    output_path = Path(write_file)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as file:
+        json.dump(results, file, indent=4)
