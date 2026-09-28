@@ -1,0 +1,39 @@
+[project]
+name = "call"
+version = "0.1.0"
+description = "Function-calling generation with constrained decoding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "llm-sdk",
+    "numpy>=2.0.0",
+    "pydantic>=2.11.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "llm_sdk",
+]
+
+[tool.uv.sources]
+llm-sdk = { workspace = true }
+
+[tool.mypy]
+exclude = ["llm_sdk/", ".venv/"]
+
+[tool.flake8]
+exclude = [".venv", "llm_sdk"]
+extend-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
+max-line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "flake8-docstrings>=1.7.0",
+    "mypy>=2.3.1",
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+]

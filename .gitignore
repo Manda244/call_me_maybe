@@ -1,0 +1,13 @@
+.venv/
+**pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.coverage
+.vscode/
+.idea/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
