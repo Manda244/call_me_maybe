@@ -1,10 +1,9 @@
 [
   {
-    "prompt": "What is the sum of -2 and 0.5?",
-    "name": "fn_add_numbers",
+    "prompt": "",
+    "name": "fn_get_square_root",
     "parameters": {
-      "a": -2,
-      "b": 0.5
+      "a": 12.0
     }
   },
   {
@@ -47,14 +46,14 @@
     "prompt": "What is the square root of 16?",
     "name": "fn_get_square_root",
     "parameters": {
-      "a": 16
+      "a": 16.0
     }
   },
   {
     "prompt": "Calculate the square root of 144",
     "name": "fn_get_square_root",
     "parameters": {
-      "a": 144
+      "a": 144.0
     }
   },
   {
