@@ -8,7 +8,11 @@ from typing import Callable
 import numpy as np
 from llm_sdk import Small_LLM_Model
 
-from src.constraints import JsonCallConstraint
+from src.constraints import (
+    MAX_NUMBER_DIGITS,
+    JsonCallConstraint,
+    NumberTooLargeError,
+)
 from src.io_utils import (
     load_function_definitions,
     load_prompts,
@@ -172,6 +176,8 @@ def generate_parameters(
     """Generate the arguments with schema-constrained decoding.
 
     Raises:
+        NumberTooLargeError: If the model wants a number with more than
+            ``MAX_NUMBER_DIGITS`` digits.
         ValueError: If the JSON is not complete within the token limit.
     """
     constraint = JsonCallConstraint(
@@ -185,6 +191,12 @@ def generate_parameters(
         if constraint.is_complete():
             break
         logits = model.get_logits_from_input_ids(input_ids)
+        favorite = table.get(int(np.argmax(np.asarray(logits))), "")
+        if favorite and constraint.would_overflow(favorite):
+            raise NumberTooLargeError(
+                f"Number exceeds {MAX_NUMBER_DIGITS} digits "
+                f"(maximum {'9' * MAX_NUMBER_DIGITS})"
+            )
         token_id, text = _pick_token(logits, table, constraint.is_valid_token)
         constraint.consume(text)
         input_ids.append(token_id)
@@ -244,7 +256,7 @@ def run_pipeline(
         except (IndexError, KeyError, RuntimeError, TypeError, ValueError) \
                 as exc:
             print(
-                f"Warning: skipped prompt {prompt_item.prompt!r}: {exc}",
+                f"Error: prompt {prompt_item.prompt!r} skipped: {exc}",
                 file=sys.stderr,
             )
     write_json_file(output_path, results)

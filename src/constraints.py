@@ -22,7 +22,10 @@ _SIMPLE_ESCAPES = '"\\/bfnrt'
 _NUMBER_CHARS = "-.0123456789"
 # Exponents are not generated: they are never needed for function
 # arguments and could overflow to infinity (invalid JSON once dumped).
-_MAX_NUMBER_LENGTH = 30
+# A number has at most 15 digits (integer and decimal digits together),
+# so the largest value is 999999999999999. 15 digits is also what a
+# float can represent exactly.
+MAX_NUMBER_DIGITS = 15
 
 # A prefix must always be completable into a valid JSON number,
 # otherwise the decoder could end up in a dead end.
@@ -31,7 +34,12 @@ _NUMBER_FULL = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?")
 _INTEGER_PREFIX = re.compile(r"-?(?:0|[1-9][0-9]*)?")
 _INTEGER_FULL = re.compile(r"-?(?:0|[1-9][0-9]*)")
 
-_Status = Literal["invalid", "open", "closed"]
+_Status = Literal["invalid", "open", "closed", "overflow"]
+_Verdict = Literal["valid", "invalid", "overflow"]
+
+
+class NumberTooLargeError(ValueError):
+    """Raised when a number needs more digits than the allowed maximum."""
 
 
 def _scan_string(body: str) -> tuple[bool, int]:
@@ -106,6 +114,7 @@ class JsonCallConstraint(BaseModel):
 
         Returns:
             ``("invalid", "")`` if the text cannot be a valid value,
+            ``("overflow", "")`` if a number has too many digits,
             ``("open", "")`` if the text ends inside the value, or
             ``("closed", rest)`` if the value is finished, ``rest`` being
             the text that follows it.
@@ -139,12 +148,13 @@ class JsonCallConstraint(BaseModel):
         while end < len(text) and text[end] in _NUMBER_CHARS:
             end += 1
         value = text[:end]
-        if len(value) > _MAX_NUMBER_LENGTH:
-            return "invalid", ""
+        digits = sum(character.isdigit() for character in value)
+        if digits > MAX_NUMBER_DIGITS:
+            return "overflow", ""
         if end == len(text):
-            # An incomplete number may not reach the maximum length,
-            # otherwise it could never be completed.
-            room = len(value) < _MAX_NUMBER_LENGTH
+            # An incomplete number ("-", "12.") may not use all the
+            # digits, otherwise it could never be completed.
+            room = digits < MAX_NUMBER_DIGITS
             if prefix.fullmatch(value) and (room or full.fullmatch(value)):
                 return "open", ""
             return "invalid", ""
@@ -161,33 +171,50 @@ class JsonCallConstraint(BaseModel):
                 return "open", ""
         return "invalid", ""
 
+    def _walk(self, text: str) -> _Verdict:
+        """Check ``text`` against the expected call structure.
+
+        Returns:
+            ``"valid"`` if ``text`` is a valid prefix of the call,
+            ``"overflow"`` if a number has more than ``MAX_NUMBER_DIGITS``
+            digits, ``"invalid"`` in every other case.
+        """
+        opening = self._opening()
+        if len(text) <= len(opening):
+            return "valid" if opening.startswith(text) else "invalid"
+        if not text.startswith(opening):
+            return "invalid"
+        rest = text[len(opening):]
+        parameters = self.function_definition.parameters
+        for index, (name, spec) in enumerate(parameters.items()):
+            prefix = self._key_prefix(name, index)
+            if len(rest) <= len(prefix):
+                return "valid" if prefix.startswith(rest) else "invalid"
+            if not rest.startswith(prefix):
+                return "invalid"
+            status, rest = self._consume_value(
+                rest[len(prefix):], spec.type
+            )
+            if status == "invalid":
+                return "invalid"
+            if status == "overflow":
+                return "overflow"
+            if status == "open":
+                return "valid"
+        return "valid" if "}}".startswith(rest) else "invalid"
+
     def is_valid_prefix(self, text: str) -> bool:
         """Return whether ``text`` is a valid prefix of the constrained call.
 
         Args:
             text: Full generated text, including the candidate token.
         """
-        opening = self._opening()
-        if len(text) <= len(opening):
-            return opening.startswith(text)
-        if not text.startswith(opening):
-            return False
-        rest = text[len(opening):]
-        parameters = self.function_definition.parameters
-        for index, (name, spec) in enumerate(parameters.items()):
-            prefix = self._key_prefix(name, index)
-            if len(rest) <= len(prefix):
-                return prefix.startswith(rest)
-            if not rest.startswith(prefix):
-                return False
-            status, rest = self._consume_value(
-                rest[len(prefix):], spec.type
-            )
-            if status == "invalid":
-                return False
-            if status == "open":
-                return True
-        return "}}".startswith(rest)
+        return self._walk(text) == "valid"
+
+    def would_overflow(self, token_text: str) -> bool:
+        """Return whether a token gives a number too many digits."""
+        candidate = self.state.generated + token_text
+        return self._walk(candidate) == "overflow"
 
     def is_valid_token(self, token_text: str) -> bool:
         """Return whether appending ``token_text`` keeps the JSON valid."""
