@@ -8,7 +8,6 @@ where every value respects the type declared in the function definition.
 """
 
 import json
-import math
 import re
 from collections.abc import Iterable, Mapping
 from typing import Literal
@@ -27,12 +26,14 @@ _NUMBER_CHARS = "-.0123456789"
 # float can represent exactly.
 MAX_NUMBER_DIGITS = 15
 
-# A prefix must always be completable into a valid JSON number,
-# otherwise the decoder could end up in a dead end.
-_NUMBER_PREFIX = re.compile(r"-?(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*)?)?")
-_NUMBER_FULL = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?")
-_INTEGER_PREFIX = re.compile(r"-?(?:0|[1-9][0-9]*)?")
-_INTEGER_FULL = re.compile(r"-?(?:0|[1-9][0-9]*)")
+# A prefix must always be completable into a valid number, otherwise the
+# decoder could end up in a dead end. Leading zeros ("02", "007") are
+# accepted because prompts contain them; the value is read with
+# int()/float(), so "02" becomes 2 (strict JSON would reject it).
+_NUMBER_PREFIX = re.compile(r"-?(?:[0-9]+(?:\.[0-9]*)?)?")
+_NUMBER_FULL = re.compile(r"-?[0-9]+(?:\.[0-9]+)?")
+_INTEGER_PREFIX = re.compile(r"-?[0-9]*")
+_INTEGER_FULL = re.compile(r"-?[0-9]+")
 
 _Status = Literal["invalid", "open", "closed", "overflow"]
 _Verdict = Literal["valid", "invalid", "overflow"]
@@ -275,19 +276,34 @@ class JsonCallConstraint(BaseModel):
         if candidate.endswith("}}") and self._is_complete(candidate):
             self.state.complete = True
 
+    def _value_spans(self, text: str) -> list[str] | None:
+        """Split a complete call into the raw text of each value.
+
+        Returns:
+            One string per parameter (in definition order), or None if
+            ``text`` is not a complete call.
+        """
+        opening = self._opening()
+        if not text.startswith(opening):
+            return None
+        rest = text[len(opening):]
+        spans: list[str] = []
+        parameters = self.function_definition.parameters
+        for index, (name, spec) in enumerate(parameters.items()):
+            prefix = self._key_prefix(name, index)
+            if not rest.startswith(prefix):
+                return None
+            rest = rest[len(prefix):]
+            status, after = self._consume_value(rest, spec.type)
+            if status != "closed":
+                return None
+            spans.append(rest[:len(rest) - len(after)])
+            rest = after
+        return spans if rest == "}}" else None
+
     def _is_complete(self, text: str) -> bool:
         """Return whether ``text`` is a complete call object."""
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            return False
-        if not isinstance(payload, dict):
-            return False
-        if set(payload) != {"name", "parameters"}:
-            return False
-        parameters = payload["parameters"]
-        expected = set(self.function_definition.parameters)
-        return isinstance(parameters, dict) and set(parameters) == expected
+        return self._value_spans(text) is not None
 
     def is_complete(self) -> bool:
         """Return whether the constrained object is complete."""
@@ -297,44 +313,33 @@ class JsonCallConstraint(BaseModel):
         """Return the generated parameters with the declared types.
 
         Numbers are converted to ``float`` as in the expected output
-        (``{"a": 2.0}``).
+        (``{"a": 2.0}``); leading zeros are dropped (``02`` gives 2.0).
 
         Raises:
-            ValueError: If the generation is incomplete or a value does
-                not match its declared type.
+            ValueError: If the generation is incomplete or a value is
+                invalid.
         """
-        if not self.is_complete():
+        spans = self._value_spans(self.state.generated)
+        if spans is None:
             raise ValueError("JSON generation is incomplete")
-        payload = json.loads(self.state.generated)
-        raw = payload.get("parameters")
-        if not isinstance(raw, dict):
-            raise ValueError("Generated parameters are not an object")
         result: dict[str, str | float | int | bool] = {}
-        for name, spec in self.function_definition.parameters.items():
-            if name not in raw:
-                raise ValueError(f"Missing parameter: {name}")
-            result[name] = self._convert(name, raw[name], spec.type)
+        parameters = self.function_definition.parameters
+        for (name, spec), span in zip(parameters.items(), spans):
+            result[name] = self._decode_value(name, span, spec.type)
         return result
 
     @staticmethod
-    def _convert(
-        name: str, value: object, value_type: str
+    def _decode_value(
+        name: str, span: str, value_type: str
     ) -> str | float | int | bool:
-        """Check a decoded value against its type and normalize it."""
-        if value_type == "string" and isinstance(value, str):
-            return value
-        if value_type == "boolean" and isinstance(value, bool):
-            return value
-        is_numeric = isinstance(value, (int, float))
-        if is_numeric and not isinstance(value, bool):
-            if value_type == "integer" and isinstance(value, int):
-                return value
-            if value_type == "number":
-                try:
-                    number = float(value)  # type: ignore[arg-type]
-                except OverflowError:
-                    raise ValueError(f"Number too large: {name}") from None
-                if not math.isfinite(number):
-                    raise ValueError(f"Number too large: {name}")
-                return number
-        raise ValueError(f"Parameter {name!r} is not a valid {value_type}")
+        """Convert the raw text of one value to its Python value."""
+        try:
+            if value_type == "string":
+                return str(json.loads(span))
+            if value_type == "boolean":
+                return span == "true"
+            if value_type == "integer":
+                return int(span)
+            return float(span)
+        except ValueError as exc:
+            raise ValueError(f"Invalid value for {name!r}: {span}") from exc

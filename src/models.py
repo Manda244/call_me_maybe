@@ -29,7 +29,7 @@ class PromptInput(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    prompt: str
+    prompt: str = Field(min_length=1)
 
 
 class FunctionCallResult(BaseModel):
@@ -37,6 +37,6 @@ class FunctionCallResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    prompt: str
+    prompt: str = Field(min_length=1)
     name: str
     parameters: dict[str, str | float | int | bool]
