@@ -19,14 +19,11 @@ members = [
 llm-sdk = { workspace = true }
 
 [tool.mypy]
-exclude = [".venv/"]
-mypy_path = ["llm_sdk"]
-ignore_missing_imports = true
+exclude = ["llm_sdk/", ".venv/"]
 
-[tool.flake8]
-exclude = [".venv", "llm_sdk"]
-extend-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]
-max-line-length = 100
+[[tool.mypy.overrides]]
+module = ["llm_sdk", "llm_sdk.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

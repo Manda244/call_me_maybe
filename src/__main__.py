@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-import src
+from src import run_pipeline
 
 DEFAULT_FUNCTIONS = Path("data/input/functions_definition.json")
 DEFAULT_INPUT = Path("data/input/function_calling_tests.json")
@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     args = parse_args(argv)
     try:
-        results = src.run_pipeline(
+        results = run_pipeline(
             args.functions_definition, args.input, args.output
         )
     except KeyboardInterrupt:

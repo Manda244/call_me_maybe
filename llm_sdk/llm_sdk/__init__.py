@@ -66,7 +66,7 @@ class Small_LLM_Model:
             device_map="auto" if self._device == "cuda" else None,
             trust_remote_code=trust_remote_code,
         )
-        # self._model.to(self._device)
+        self._model.to(self._device)
         self._model.eval()
 
         # switch to inference-only mode
