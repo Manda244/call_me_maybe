@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
-from llm_sdk import Small_LLM_Model
+from llm_sdk import Small_LLM_Model  # type: ignore
 
 from src.constraints import (
     MAX_NUMBER_DIGITS,
