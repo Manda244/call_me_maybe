@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from src.generator import run_pipeline
+import src
 
 DEFAULT_FUNCTIONS = Path("data/input/functions_definition.json")
 DEFAULT_INPUT = Path("data/input/function_calling_tests.json")
@@ -53,17 +53,16 @@ def main(argv: list[str] | None = None) -> int:
     """
     args = parse_args(argv)
     try:
-        results = run_pipeline(
+        results = src.run_pipeline(
             args.functions_definition, args.input, args.output
         )
     except KeyboardInterrupt:
         print("Interrupted by user.", file=sys.stderr)
         return 130
     except (OSError, ValueError, TypeError) as exc:
-        # OSError also covers FileNotFoundError.
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    except Exception as exc:  # noqa: BLE001 - last resort, never crash
+    except Exception as exc:
         print(
             f"Unexpected error ({type(exc).__name__}): {exc}",
             file=sys.stderr,

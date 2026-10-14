@@ -19,17 +19,9 @@ from src.models import FunctionDefinition
 _HEX_DIGITS = "0123456789abcdefABCDEF"
 _SIMPLE_ESCAPES = '"\\/bfnrt'
 _NUMBER_CHARS = "-.0123456789"
-# Exponents are not generated: they are never needed for function
-# arguments and could overflow to infinity (invalid JSON once dumped).
-# A number has at most 15 digits (integer and decimal digits together),
-# so the largest value is 999999999999999. 15 digits is also what a
-# float can represent exactly.
+
 MAX_NUMBER_DIGITS = 15
 
-# A prefix must always be completable into a valid number, otherwise the
-# decoder could end up in a dead end. Leading zeros ("02", "007") are
-# accepted because prompts contain them; the value is read with
-# int()/float(), so "02" becomes 2 (strict JSON would reject it).
 _NUMBER_PREFIX = re.compile(r"-?(?:[0-9]+(?:\.[0-9]*)?)?")
 _NUMBER_FULL = re.compile(r"-?[0-9]+(?:\.[0-9]+)?")
 _INTEGER_PREFIX = re.compile(r"-?[0-9]*")
@@ -153,8 +145,6 @@ class JsonCallConstraint(BaseModel):
         if digits > MAX_NUMBER_DIGITS:
             return "overflow", ""
         if end == len(text):
-            # An incomplete number ("-", "12.") may not use all the
-            # digits, otherwise it could never be completed.
             room = digits < MAX_NUMBER_DIGITS
             if prefix.fullmatch(value) and (room or full.fullmatch(value)):
                 return "open", ""

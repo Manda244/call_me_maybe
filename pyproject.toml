@@ -19,7 +19,9 @@ members = [
 llm-sdk = { workspace = true }
 
 [tool.mypy]
-exclude = ["llm_sdk/", ".venv/"]
+exclude = [".venv/"]
+mypy_path = ["llm_sdk"]
+ignore_missing_imports = true
 
 [tool.flake8]
 exclude = [".venv", "llm_sdk"]
